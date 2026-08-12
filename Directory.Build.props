@@ -1,0 +1,48 @@
+<Project>
+
+  <!--
+    Réglages communs à tous les projets de la solution.
+    Politique qualité : tout avertissement (y compris ceux des analyseurs
+    Meziantou / AsyncFixer / Sonar) est traité comme une ERREUR de build.
+    Le code DOIT donc passer ces analyseurs pour compiler.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+     <!-- Suppress NU1507: There are 2 package sources defined in your configuration. When using central package management, please map your package sources with package source mapping or specify a single package source. -->
+     <NoWarn>$(NoWarn);NU1507</NoWarn>
+
+    <!--
+      OWASP A06 (composants vulnérables et obsolètes) : le restore échoue si une
+      dépendance, directe OU transitive, est signalée vulnérable par l'avis NuGet.
+    -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+  </PropertyGroup>
+
+  <!-- Analyseurs statiques appliqués à TOUS les projets (versions dans Directory.Packages.props). -->
+  <ItemGroup>
+    <PackageReference Include="Meziantou.Analyzer">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="AsyncFixer">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="SonarAnalyzer.CSharp">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,43 @@
+<Project>
+
+  <!--
+    Central Package Management : une seule source de vérité pour les versions.
+    Les projets référencent les packages SANS attribut Version.
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Abstractions utilisées par Core (aucune implémentation concrète ici). -->
+    <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+
+    <!-- Hôte + infrastructure (consommés par Console / Infrastructure aux incréments suivants). -->
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.9.0" />
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
+  </ItemGroup>
+
+  <!-- Analyseurs statiques (obligatoires, cf. Directory.Build.props). -->
+  <ItemGroup>
+    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.147" />
+    <PackageVersion Include="AsyncFixer" Version="2.1.0" />
+    <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.32.0.713" />
+  </ItemGroup>
+
+  <!-- Tests. FluentAssertions reste sur la ligne 7.x : libre (Apache 2.0), y compris en usage commercial.
+       Le "7.*" garantit qu'on ne bascule jamais vers la 8.x payante. -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="NSubstitute" Version="6.2.0" />
+    <PackageVersion Include="FluentAssertions" Version="7.2.2" />
+    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
+    <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,39 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+trim_trailing_whitespace = true
+
+[*.{cs}]
+indent_size = 4
+
+# --- Style C# imposé (vérifié au build via EnforceCodeStyleInBuild) ---
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_style_require_accessibility_modifiers = always:warning
+csharp_prefer_braces = true:warning
+dotnet_style_readonly_field = true:warning
+csharp_style_var_when_type_is_apparent = true:suggestion
+
+# --- Curation des analyseurs ---
+# Politique : les analyseurs restent stricts sur la correction (bugs, async, sécurité,
+# nommage, code smells). On NE relâche que des règles purement structurelles qui
+# entreraient en conflit avec un choix d'organisation délibéré du projet.
+
+# MA0048 (Meziantou) : "le nom de fichier doit correspondre au type". Désactivée
+# volontairement pour autoriser le regroupement de petits records cohésifs
+# (ex. le modèle de domaine) dans un même fichier. Choix d'équipe assumé.
+dotnet_diagnostic.MA0048.severity = none
+
+# Tout le reste des analyseurs conserve sa sévérité par défaut et reste bloquant
+# via TreatWarningsAsErrors. Ajuster ici, au cas par cas et avec justification,
+# si une règle s'avère inadaptée au contexte.
+
+# --- Spécificités des tests ---
+[tests/**.cs]
+# Noms de tests avec underscores (style Given_When_Then) : convention assumée.
+dotnet_diagnostic.CA1707.severity = none
+# ConfigureAwait n'a pas de sens dans un projet de tests (pas de contexte de synchronisation).
+dotnet_diagnostic.MA0004.severity = none
