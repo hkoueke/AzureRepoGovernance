@@ -9,7 +9,7 @@ verrouillage, aucune modification de policy, aucune complétion de pull request.
 
 ## Prérequis
 
-- .NET SDK 8.0
+- .NET SDK 10.0
 - Un poste **Windows joint au domaine** : l'authentification est celle de la session
   AD courante (NTLM/Kerberos). Aucun jeton, aucun mot de passe, aucun secret stocké.
 - Des droits de lecture sur les projets à auditer (le serveur ne renvoie que ce que
@@ -26,6 +26,53 @@ Les avertissements sont traités comme des erreurs (analyseurs Meziantou, AsyncF
 SonarAnalyzer inclus) : le code doit passer l'analyse statique pour compiler.
 `NuGetAudit` fait par ailleurs échouer le restore si une dépendance, directe ou
 transitive, est signalée vulnérable.
+
+## Intégration et livraison continues
+
+Le workflow `.github/workflows/ci.yml` s'exécute à chaque push sur `main`, à chaque
+pull request, et une fois par semaine. Il enchaîne restore, build et tests, puis
+publie un exécutable **auto-contenu et mono-fichier** pour `win-x64` et `win-x86`,
+téléchargeable depuis l'onglet *Actions*.
+
+L'exécution hebdomadaire existe pour `NuGetAudit` : réglé sur `all`/`low`, il fait
+échouer le restore dès qu'un avis est publié sur une dépendance, **sans la moindre
+modification de code**. Mieux vaut l'apprendre le lundi matin qu'au milieu d'une
+pull request.
+
+Pousser une étiquette `v*` crée en plus une release GitHub avec les deux
+exécutables, leurs empreintes SHA256 et `appsettings.sample.json` :
+
+```powershell
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+### L'exécutable livré
+
+Un seul fichier suffit : ni runtime .NET, ni DLL à côté. Comptez 35 à 45 Mo — le
+runtime, les analyseurs de code exclus et les données ICU (l'outil n'est pas en
+globalisation invariante) sont embarqués et compressés.
+
+Sans `appsettings.json` à côté de lui, l'exécutable a besoin du serveur en ligne
+de commande :
+
+```powershell
+GovernanceAuditor-win-x64.exe --serveur https://devops.entreprise.local --collection DefaultCollection
+```
+
+Déposez `appsettings.sample.json` renommé en `appsettings.json` à côté de
+l'exécutable pour éviter de retaper ces options.
+
+> **Environnements verrouillés.** Un exécutable mono-fichier extrait ses
+> bibliothèques natives dans `%TEMP%` au premier lancement. Si une stratégie
+> AppLocker interdit l'exécution depuis les dossiers temporaires, redirigez
+> l'extraction : `setx DOTNET_BUNDLE_EXTRACT_TO_DIR C:\Outils\GovernanceAuditor\cache`.
+
+Vérification de l'empreinte après téléchargement :
+
+```powershell
+Get-FileHash GovernanceAuditor-win-x64.exe -Algorithm SHA256
+```
 
 ## Configuration
 

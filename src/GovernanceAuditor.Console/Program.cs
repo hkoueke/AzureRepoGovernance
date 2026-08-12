@@ -53,8 +53,25 @@ internal static class Program
         }
         finally
         {
-            SysConsole.ReadKey();
+            PauseIfInteractive();
         }
+    }
+
+    /// <summary>
+    /// Laisse la fenêtre ouverte après un double-clic, mais uniquement en session
+    /// réellement interactive. Sur une entrée ou une sortie redirigée — tâche
+    /// planifiée, pipeline, « GovernanceAuditor &gt; rapport.log » — l'attente
+    /// bloquerait l'appelant, et <see cref="System.Console.ReadKey()"/> lèverait
+    /// <see cref="InvalidOperationException"/> faute de console à lire.
+    /// </summary>
+    private static void PauseIfInteractive()
+    {
+        if (SysConsole.IsInputRedirected || SysConsole.IsOutputRedirected)
+        {
+            return;
+        }
+
+        SysConsole.ReadKey(intercept: true);
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "MA0051:Method is too long", Justification = "<En attente>")]
