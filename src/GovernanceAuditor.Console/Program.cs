@@ -84,14 +84,12 @@ internal static class Program
             ContentRootPath = AppContext.BaseDirectory,
         });
 
-        builder.Configuration.AddCommandLine(NormaliseFlags(args), SwitchMappings);
+        // Réglages locaux, à côté de l'exécutable et hors dépôt : permet de garder
+        // serveur et projets réels sans les versionner. Facultatif.
+        builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: false);
 
-        // « --projets a,b,c » : traduit en entrées indexées Scope:Projects:0..n
-        // (le liant de configuration n'accepte pas de liste sur une seule clé).
-        if (ExtractProjects(args) is { Count: > 0 } projects)
-        {
-            builder.Configuration.AddInMemoryCollection(projects);
-        }
+        builder.Configuration.AddCommandLine(NormaliseFlags(args), SwitchMappings);
+        ApplyProjectScope(builder.Configuration, args);
 
         ConfigureLogging(builder.Logging);
         ConfigureServices(builder.Services);
@@ -113,7 +111,8 @@ internal static class Program
             server.BaseUrl,
             server.Collection,
             scope.Projects.Count == 0 ? "tous les projets accessibles" : string.Join(", ", scope.Projects),
-            execution.MaxDegreeOfParallelism);
+            execution.MaxDegreeOfParallelism,
+            scope.Projects.Count > 0);
 
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMinutes(execution.GlobalTimeoutMinutes));
         var interrupted = false;
@@ -243,30 +242,83 @@ internal static class Program
         }
     }
 
-    /// <summary>Traduit « --projets a,b,c » en clés de configuration indexées.</summary>
-    private static List<KeyValuePair<string, string?>> ExtractProjects(string[] args)
+    /// <summary>
+    /// Traduit « --projets a,b,c » en clés indexées <c>Scope:Projects:0..n</c> (le liant
+    /// de configuration n'accepte pas de liste sur une seule clé).
+    /// </summary>
+    /// <remarks>
+    /// L'option REMPLACE le périmètre configuré, elle ne s'y ajoute pas. Les fournisseurs
+    /// de configuration fusionnent clé par clé : sans blanchiment des index excédentaires,
+    /// « --projets Paie » sur un appsettings.json qui en déclare deux donnerait
+    /// « Paie » + la seconde entrée héritée. « --projets » sans valeur vide le périmètre,
+    /// c'est-à-dire « tous les projets accessibles ».
+    /// </remarks>
+    internal static void ApplyProjectScope(ConfigurationManager configuration, string[] args)
     {
-        var entries = new List<KeyValuePair<string, string?>>();
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(args);
 
-        for (var i = 0; i < args.Length - 1; i++)
+        if (!TryReadProjects(args, out var names))
+        {
+            return;
+        }
+
+        const string prefix = $"{ScopeOptions.SectionName}:Projects";
+        var configured = configuration.GetSection(prefix).GetChildren().Count();
+        var entries = new List<KeyValuePair<string, string?>>(Math.Max(names.Count, configured));
+
+        for (var index = 0; index < names.Count; index++)
+        {
+            entries.Add(new KeyValuePair<string, string?>(Key(index), names[index]));
+        }
+
+        // Les index restants proviennent d'une source de moindre priorité : on les
+        // neutralise (les entrées vides sont écartées à la lecture du périmètre).
+        for (var index = names.Count; index < configured; index++)
+        {
+            entries.Add(new KeyValuePair<string, string?>(Key(index), string.Empty));
+        }
+
+        if (entries.Count > 0)
+        {
+            configuration.AddInMemoryCollection(entries);
+        }
+
+        static string Key(int index) =>
+            $"{prefix}:{index.ToString(CultureInfo.InvariantCulture)}";
+    }
+
+    /// <summary>
+    /// Indique si « --projets » figure dans la ligne de commande, et renvoie les noms lus.
+    /// La distinction « absent » / « fourni mais vide » porte tout le sens : la seconde
+    /// forme est une demande explicite d'ouvrir le périmètre.
+    /// </summary>
+    private static bool TryReadProjects(string[] args, out List<string> names)
+    {
+        names = [];
+        var found = false;
+
+        for (var i = 0; i < args.Length; i++)
         {
             if (!string.Equals(args[i], "--projets", StringComparison.Ordinal))
             {
                 continue;
             }
 
-            var names = args[i + 1]
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            found = true;
 
-            for (var index = 0; index < names.Length; index++)
+            // Une valeur absente, ou immédiatement suivie d'une autre option, vaut
+            // « périmètre vide » : « --projets --anonymiser » ne doit pas créer un
+            // projet nommé « --anonymiser ».
+            if (i + 1 >= args.Length || args[i + 1].StartsWith("--", StringComparison.Ordinal))
             {
-                entries.Add(new KeyValuePair<string, string?>(
-                    $"{ScopeOptions.SectionName}:Projects:{index.ToString(CultureInfo.InvariantCulture)}",
-                    names[index]));
+                continue;
             }
+
+            names.AddRange(args[i + 1].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         }
 
-        return entries;
+        return found;
     }
 
     /// <summary>

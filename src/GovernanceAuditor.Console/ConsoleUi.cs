@@ -76,17 +76,22 @@ internal sealed class ConsoleUi
     }
 
     /// <summary>Affiche l'en-tête de l'exécution et le contexte de connexion.</summary>
-    public void Banner(string server, string collection, string scope, int parallelism)
+    public void Banner(string server, string collection, string scope, int parallelism, bool scopeRestricted)
     {
         var rule = new string(_unicode ? '─' : '-', 62);
 
         SysConsole.WriteLine();
         Write($"  {Glyph("▸", ">")} Auditeur de gouvernance des dépôts Azure DevOps", ConsoleColor.Cyan);
-        Write($"  {Glyph("▸", ">")} Hervé KOUEKE (herve.kouekekouemeni@cgi.com", ConsoleColor.Cyan);
+        Write($"  {Glyph("▸", ">")} Hervé KOUEKE (herve.kouekekouemeni@cgi.com)", ConsoleColor.Cyan);
         Write($"  {rule}", ConsoleColor.DarkGray);
         Write($"  Serveur      : {server}", ConsoleColor.DarkGray);
         Write($"  Collection   : {collection}", ConsoleColor.DarkGray);
-        Write($"  Périmètre    : {scope}", ConsoleColor.DarkGray);
+
+        // Un périmètre restreint explique à lui seul un rapport qui paraît incomplet :
+        // il doit ressortir, pas se fondre dans le gris des autres lignes.
+        Write(
+            $"  Périmètre    : {scope}",
+            scopeRestricted ? ConsoleColor.Yellow : ConsoleColor.DarkGray);
         Write($"  Parallélisme : {parallelism.ToString(CultureInfo.CurrentCulture)} dépôts simultanés", ConsoleColor.DarkGray);
         Write($"  Mode         : lecture seule (aucune modification du serveur)", ConsoleColor.DarkGray);
         SysConsole.WriteLine();
@@ -131,8 +136,12 @@ internal sealed class ConsoleUi
             }
 
             _lastMilestone = milestone;
+
+            // Un seul argument : la surcharge WriteLine(string, object) traiterait le
+            // premier paramètre comme un format composite. Le nom de la culture ne
+            // contient aucun « {0} », si bien que la progression était purement et
+            // simplement perdue — précisément sur le chemin redirigé (fichier, CI).
             SysConsole.WriteLine(
-                CultureInfo.CurrentCulture.DisplayName,
                 string.Create(CultureInfo.InvariantCulture, $"  ... {done}/{total} dépôts analysés ({percent} %), {failed} en échec"));
             return;
         }
@@ -179,6 +188,11 @@ internal sealed class ConsoleUi
         if (result.RepositoriesFailed > 0)
         {
             Write($"    Dépôts en échec     : {result.RepositoriesFailed.ToString(CultureInfo.CurrentCulture)}", ConsoleColor.Yellow);
+        }
+
+        if (result.RepositoriesSkipped > 0)
+        {
+            Write($"    Dépôts écartés      : {result.RepositoriesSkipped.ToString(CultureInfo.CurrentCulture)} (vides ou désactivés)", ConsoleColor.DarkGray);
         }
 
         Write(
@@ -241,7 +255,7 @@ internal sealed class ConsoleUi
     {
         SysConsole.WriteLine();
         Write("  Auditeur de gouvernance des dépôts Azure DevOps", ConsoleColor.Cyan);
-        Write($" Hervé KOUEKE (herve.kouekekouemeni@cgi.com", ConsoleColor.Cyan);
+        Write($" Hervé KOUEKE (herve.kouekekouemeni@cgi.com)", ConsoleColor.Cyan);
         SysConsole.WriteLine();
         SysConsole.WriteLine("  Analyse en LECTURE SEULE les dépôts Git d'un serveur Azure DevOps Server");
         SysConsole.WriteLine("  et produit un rapport Markdown consolidé.");
@@ -252,7 +266,7 @@ internal sealed class ConsoleUi
         Write("  Options", ConsoleColor.Cyan);
         SysConsole.WriteLine("    --serveur <url>        URL du serveur (ex. https://devops.entreprise.local)");
         SysConsole.WriteLine("    --collection <nom>     Collection (défaut : DefaultCollection)");
-        SysConsole.WriteLine("    --projets <a,b,c>      Restreint l'analyse à ces projets (défaut : tous)");
+        SysConsole.WriteLine("    --projets <a,b,c>      Remplace le périmètre configuré ; vide (\"\") = tous");
         SysConsole.WriteLine("    --sortie <dossier>     Dossier du rapport (défaut : ./reports)");
         SysConsole.WriteLine("    --parallelisme <n>     Dépôts analysés simultanément (défaut : 5)");
         SysConsole.WriteLine("    --anonymiser           Pseudonymise les acteurs dans le rapport");
@@ -264,7 +278,7 @@ internal sealed class ConsoleUi
         SysConsole.WriteLine("    0  Aucune anomalie critique");
         SysConsole.WriteLine("    1  Au moins une anomalie critique (ou erreur fatale)");
         SysConsole.WriteLine("    2  Configuration invalide");
-        SysConsole.WriteLine("    3  Analyse partielle : trop de dépôts en échec, ou interruption");
+        SysConsole.WriteLine("    3  Analyse partielle : aucun dépôt analysé, trop d'échecs, ou interruption");
         SysConsole.WriteLine();
         Write("  Authentification : Windows intégrée (session AD courante). Aucun secret stocké.", ConsoleColor.DarkGray);
         SysConsole.WriteLine();

@@ -21,7 +21,11 @@ internal sealed record RepositoryDto
     public string Name { get; init; } = string.Empty;
     public string? Url { get; init; }
     public string? WebUrl { get; init; }
+
+    // Azure DevOps sérialise « defaultBranch » avec EmitDefaultValue=false : le champ
+    // est absent — et non vide — pour un dépôt jamais initialisé.
     public string? DefaultBranch { get; init; }
+    public bool IsDisabled { get; init; }
     public ProjectDto? Project { get; init; }
 }
 

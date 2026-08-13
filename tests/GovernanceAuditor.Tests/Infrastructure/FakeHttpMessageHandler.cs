@@ -23,6 +23,9 @@ internal sealed class FakeHttpMessageHandler : HttpMessageHandler
         return Task.FromResult(_responder(request));
     }
 
+    /// <summary>Construit une réponse sans corps portant le code fourni.</summary>
+    public static HttpResponseMessage Status(HttpStatusCode statusCode) => new(statusCode);
+
     /// <summary>Construit une réponse 200 JSON, avec éventuellement un token de continuation.</summary>
     public static HttpResponseMessage Json(string body, string? continuationToken = null)
     {

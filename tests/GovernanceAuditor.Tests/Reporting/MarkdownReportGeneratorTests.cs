@@ -133,6 +133,35 @@ public sealed class MarkdownReportGeneratorTests
     }
 
     [Fact]
+    public async Task Report_lists_skipped_repositories_with_their_reason()
+    {
+        var result = SampleResult() with
+        {
+            Skipped =
+            [
+                new SkippedRepository { Repository = "Delta", Reason = "dépôt vide : aucune branche, rien à auditer" },
+                new SkippedRepository { Repository = "Epsilon", Reason = "dépôt désactivé sur le serveur" },
+            ],
+        };
+
+        var content = await RenderAsync(result);
+
+        content.Should().Contain("Dépôts écartés : 2");
+        content.Should().Contain("## Dépôts écartés");
+        content.Should().Contain("**Delta** : dépôt vide");
+        content.Should().Contain("**Epsilon** : dépôt désactivé sur le serveur");
+    }
+
+    [Fact]
+    public async Task Report_omits_the_skipped_section_when_nothing_was_skipped()
+    {
+        var content = await RenderAsync(SampleResult());
+
+        content.Should().NotContain("## Dépôts écartés");
+        content.Should().NotContain("Dépôts écartés");
+    }
+
+    [Fact]
     public async Task Empty_result_still_produces_title_and_summary()
     {
         var empty = new AuditRunResult

@@ -43,13 +43,21 @@ Pousser une étiquette `v*` crée en plus une release GitHub avec les deux
 exécutables, leurs empreintes SHA256 et `appsettings.sample.json` :
 
 ```powershell
-git tag v1.0.0
+git checkout main
+git pull origin main
+git tag -a v1.0.0 -m "v1.0.0"
 git push origin v1.0.0
 ```
 
+L'étiquette **détermine la version du binaire** : `v1.2.3` produit un exécutable
+qui annonce `1.2.3` dans ses propriétés de fichier, complété du commit exact.
+Hors étiquette, les builds portent un suffixe `-ci.<n>` pour qu'une compilation de
+branche ne puisse jamais passer pour une version publiée. `VersionPrefix` dans
+`Directory.Build.props` sert de valeur de repli.
+
 ### L'exécutable livré
 
-Un seul fichier suffit : ni runtime .NET, ni DLL à côté. Comptez 35 à 45 Mo — le
+Un seul fichier suffit : ni runtime .NET, ni DLL à côté. Comptez une trentaine de Mo — le
 runtime, les analyseurs de code exclus et les données ICU (l'outil n'est pas en
 globalisation invariante) sont embarqués et compressés.
 
@@ -91,11 +99,24 @@ Get-FileHash GovernanceAuditor-win-x64.exe -Algorithm SHA256
 > `AzureDevOpsServer:AllowInsecureHttp` : en authentification Windows, un canal en
 > clair expose la négociation NTLM/Kerberos.
 
+Le fichier versionné ne contient que des valeurs d'exemple. Pour vos réglages réels
+(serveur, projets internes), déposez un `appsettings.local.json` à côté de
+l'exécutable : il est lu s'il existe, prime sur `appsettings.json`, et reste hors
+du dépôt (`.gitignore`).
+
+`Scope:Projects` est une **liste blanche** : vide, l'outil analyse tous les projets
+accessibles ; renseignée, il ignore tout le reste. C'est la cause la plus fréquente
+d'un rapport qui paraît incomplet — le journal indique donc le nombre de dépôts
+renvoyés par la collection *avant* filtrage, et avertit pour chaque projet demandé
+qui ne correspond à aucun dépôt. `--projets` **remplace** ce périmètre au lieu de
+s'y ajouter.
+
 ## Exécution
 
 ```powershell
-GovernanceAuditor                              # tous les projets accessibles
-GovernanceAuditor --projets Paie,Facturation   # périmètre restreint
+GovernanceAuditor                              # périmètre défini par appsettings.json
+GovernanceAuditor --projets Paie,Facturation   # périmètre restreint à ces projets
+GovernanceAuditor --projets ""                 # tous les projets accessibles
 GovernanceAuditor --sortie D:\audits           # dossier du rapport
 GovernanceAuditor --anonymiser                 # pseudonymise les acteurs
 GovernanceAuditor --aide                       # aide complète
@@ -114,7 +135,7 @@ ajoutée au nom : une seconde exécution n'écrase jamais la précédente.
 | `0` | Aucune anomalie critique |
 | `1` | Au moins une anomalie critique, ou erreur fatale |
 | `2` | Configuration invalide (rien n'a été analysé) |
-| `3` | Analyse partielle : trop de dépôts en échec, ou interruption |
+| `3` | Analyse partielle : aucun dépôt analysé, trop de dépôts en échec, ou interruption |
 
 Un résultat partiel prime sur les anomalies détectées : une analyse incomplète ne
 permet pas de conclure à l'absence de problème.

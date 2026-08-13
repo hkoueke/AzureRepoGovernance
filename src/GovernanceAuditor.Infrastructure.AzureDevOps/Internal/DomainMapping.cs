@@ -19,6 +19,7 @@ internal static class DomainMapping
             ProjectId = dto.Project?.Id,
             Url = dto.WebUrl ?? dto.Url ?? string.Empty,
             DefaultBranch = dto.DefaultBranch,
+            IsDisabled = dto.IsDisabled,
         };
     }
 
