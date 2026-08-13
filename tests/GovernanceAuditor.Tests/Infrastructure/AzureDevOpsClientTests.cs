@@ -4,6 +4,8 @@ using GovernanceAuditor.Core.Options;
 using GovernanceAuditor.Infrastructure.AzureDevOps;
 using GovernanceAuditor.Infrastructure.AzureDevOps.Dtos;
 using GovernanceAuditor.Infrastructure.AzureDevOps.Internal;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -19,7 +21,11 @@ public sealed class AzureDevOpsClientTests
         Url = "https://x",
     };
 
-    private static AzureDevOpsClient NewClient(HttpClient http, ScopeOptions? scope = null, ExecutionOptions? execution = null)
+    private static AzureDevOpsClient NewClient(
+        HttpClient http,
+        ScopeOptions? scope = null,
+        ExecutionOptions? execution = null,
+        ILogger<AzureDevOpsClient>? logger = null)
     {
         var routes = new ApiRoutes(new AzureDevOpsServerOptions
         {
@@ -32,7 +38,8 @@ public sealed class AzureDevOpsClientTests
             reader,
             routes,
             Options.Create(scope ?? new ScopeOptions()),
-            Options.Create(execution ?? new ExecutionOptions()));
+            Options.Create(execution ?? new ExecutionOptions()),
+            logger ?? NullLogger<AzureDevOpsClient>.Instance);
     }
 
     [Fact]
@@ -144,5 +151,71 @@ public sealed class AzureDevOpsClientTests
         repos.Should().ContainSingle();
         repos[0].Name.Should().Be("RepoB");
         repos[0].ProjectName.Should().Be("Beta");
+    }
+
+    [Fact]
+    public async Task GetRepositoriesAsync_reports_the_count_before_and_after_filtering()
+    {
+        const string body = """{"value":[{"id":"r1","name":"RepoA","project":{"id":"pa","name":"Alpha"}},{"id":"r2","name":"RepoB","project":{"id":"pb","name":"Beta"}}]}""";
+        using var handler = new FakeHttpMessageHandler(_ => FakeHttpMessageHandler.Json(body));
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://server/") };
+        var logger = new RecordingLogger<AzureDevOpsClient>();
+        var client = NewClient(http, scope: new ScopeOptions { Projects = ["Beta"] }, logger: logger);
+
+        await client.GetRepositoriesAsync(CancellationToken.None);
+
+        // Le total renvoyé par le serveur doit rester visible : sans lui, « 1 dépôt »
+        // ne dit pas si le serveur en a renvoyé 1 ou 200.
+        logger.Contains(LogLevel.Information, "Dépôts renvoyés par la collection : 2").Should().BeTrue();
+        logger.Contains(LogLevel.Information, "1 dépôt(s) retenu(s) sur 2").Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetRepositoriesAsync_warns_when_a_configured_project_matches_nothing()
+    {
+        const string body = """{"value":[{"id":"r1","name":"RepoA","project":{"id":"pa","name":"Alpha"}}]}""";
+        using var handler = new FakeHttpMessageHandler(_ => FakeHttpMessageHandler.Json(body));
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://server/") };
+        var logger = new RecordingLogger<AzureDevOpsClient>();
+        var client = NewClient(http, scope: new ScopeOptions { Projects = ["Alpha", "Typo"] }, logger: logger);
+
+        var repos = await client.GetRepositoriesAsync(CancellationToken.None);
+
+        repos.Should().ContainSingle();
+        logger.Contains(LogLevel.Warning, "« Typo »").Should().BeTrue();
+        logger.Contains(LogLevel.Warning, "« Alpha »").Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetRepositoriesAsync_warns_when_the_whole_scope_matches_nothing()
+    {
+        const string body = """{"value":[{"id":"r1","name":"RepoA","project":{"id":"pa","name":"Alpha"}}]}""";
+        using var handler = new FakeHttpMessageHandler(_ => FakeHttpMessageHandler.Json(body));
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://server/") };
+        var logger = new RecordingLogger<AzureDevOpsClient>();
+        var client = NewClient(http, scope: new ScopeOptions { Projects = ["Nope"] }, logger: logger);
+
+        var repos = await client.GetRepositoriesAsync(CancellationToken.None);
+
+        repos.Should().BeEmpty();
+        logger.Contains(LogLevel.Warning, "Aucun dépôt retenu").Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetRepositoriesAsync_maps_disabled_flag_and_absent_default_branch()
+    {
+        // Azure DevOps omet « defaultBranch » tant qu'aucun commit n'a été poussé.
+        const string body = """{"value":[{"id":"r1","name":"Vide","project":{"id":"pa","name":"Alpha"}},{"id":"r2","name":"Desactive","isDisabled":true,"size":0,"defaultBranch":"refs/heads/main","project":{"id":"pa","name":"Alpha"}}]}""";
+        using var handler = new FakeHttpMessageHandler(_ => FakeHttpMessageHandler.Json(body));
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://server/") };
+        var client = NewClient(http);
+
+        var repos = await client.GetRepositoriesAsync(CancellationToken.None);
+
+        repos.Should().HaveCount(2);
+        repos[0].DefaultBranch.Should().BeNull();
+        repos[0].IsDisabled.Should().BeFalse();
+        repos[1].IsDisabled.Should().BeTrue();
+        repos[1].SizeInBytes.Should().Be(0);
     }
 }

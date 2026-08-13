@@ -54,6 +54,19 @@ public sealed record CollectionError
     public required string Message { get; init; }
 }
 
+/// <summary>
+/// Dépôt volontairement écarté de l'analyse, avec le motif. Un dépôt écarté n'est
+/// ni un succès ni un échec : l'analyser n'aurait produit aucune information.
+/// </summary>
+public sealed record SkippedRepository
+{
+    /// <summary>Nom du dépôt écarté.</summary>
+    public required string Repository { get; init; }
+
+    /// <summary>Motif lisible de l'exclusion.</summary>
+    public required string Reason { get; init; }
+}
+
 /// <summary>Résultat consolidé d'une exécution de l'auditeur.</summary>
 public sealed record AuditRunResult
 {
@@ -68,6 +81,15 @@ public sealed record AuditRunResult
 
     /// <summary>Nombre de dépôts en échec de collecte.</summary>
     public required int RepositoriesFailed { get; init; }
+
+    /// <summary>
+    /// Dépôts écartés avant toute collecte (désactivés, jamais initialisés).
+    /// Vide par défaut : un dépôt écarté ne compte ni comme analysé, ni comme en échec.
+    /// </summary>
+    public IReadOnlyList<SkippedRepository> Skipped { get; init; } = [];
+
+    /// <summary>Nombre de dépôts écartés avant collecte.</summary>
+    public int RepositoriesSkipped => Skipped.Count;
 
     /// <summary>Durée totale de l'exécution.</summary>
     public required TimeSpan Duration { get; init; }

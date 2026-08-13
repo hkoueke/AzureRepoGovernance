@@ -3,6 +3,7 @@ using GovernanceAuditor.Core.Model;
 using GovernanceAuditor.Core.Options;
 using GovernanceAuditor.Infrastructure.AzureDevOps.Dtos;
 using GovernanceAuditor.Infrastructure.AzureDevOps.Internal;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace GovernanceAuditor.Infrastructure.AzureDevOps;
@@ -17,35 +18,48 @@ internal sealed class AzureDevOpsClient : IAzureDevOpsClient
     private readonly ApiRoutes _routes;
     private readonly ScopeOptions _scope;
     private readonly ExecutionOptions _execution;
+    private readonly ILogger<AzureDevOpsClient> _logger;
 
     public AzureDevOpsClient(
         AzureDevOpsApiReader reader,
         ApiRoutes routes,
         IOptions<ScopeOptions> scope,
-        IOptions<ExecutionOptions> execution)
+        IOptions<ExecutionOptions> execution,
+        ILogger<AzureDevOpsClient> logger)
     {
         ArgumentNullException.ThrowIfNull(reader);
         ArgumentNullException.ThrowIfNull(routes);
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(execution);
+        ArgumentNullException.ThrowIfNull(logger);
 
         _reader = reader;
         _routes = routes;
         _scope = scope.Value;
         _execution = execution.Value;
+        _logger = logger;
     }
 
     public async Task<IReadOnlyList<RepositoryInfo>> GetRepositoriesAsync(CancellationToken cancellationToken)
     {
         var dtos = await _reader.GetListAsync<RepositoryDto>(_routes.Repositories(), cancellationToken).ConfigureAwait(false);
+        Log.RepositoriesReturned(_logger, dtos.Count);
 
-        IEnumerable<RepositoryDto> selected = dtos;
-        if (_scope.Projects.Count > 0)
+        if (_scope.Projects.Count == 0)
         {
-            var allowed = new HashSet<string>(_scope.Projects, StringComparer.OrdinalIgnoreCase);
-            selected = dtos.Where(d => d.Project is not null &&
-                (allowed.Contains(d.Project.Name) || (d.Project.Id is not null && allowed.Contains(d.Project.Id))));
+            return dtos.Select(DomainMapping.Repository).ToList();
         }
+
+        var allowed = new HashSet<string>(_scope.Projects, StringComparer.OrdinalIgnoreCase);
+        var selected = dtos
+            .Where(d => d.Project is not null &&
+                (allowed.Contains(d.Project.Name) || (d.Project.Id is not null && allowed.Contains(d.Project.Id))))
+            .ToList();
+
+        // Un périmètre qui écarte tout est le symptôme le plus coûteux à diagnostiquer :
+        // sans ces messages, un nom de projet inexact est indiscernable d'un projet vide.
+        Log.ScopeFilterApplied(_logger, selected.Count, dtos.Count, string.Join(", ", _scope.Projects));
+        ReportUnmatchedProjects(dtos, selected.Count);
 
         return selected.Select(DomainMapping.Repository).ToList();
     }
@@ -98,5 +112,37 @@ internal sealed class AzureDevOpsClient : IAzureDevOpsClient
             .ConfigureAwait(false);
 
         return configs.SelectMany(c => DomainMapping.PoliciesForRepository(c, repository.Id)).ToList();
+    }
+
+    /// <summary>Signale chaque entrée de <c>Scope:Projects</c> qui ne correspond à aucun dépôt.</summary>
+    private void ReportUnmatchedProjects(IReadOnlyList<RepositoryDto> dtos, int retained)
+    {
+        var present = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dto in dtos)
+        {
+            if (dto.Project is not { } project)
+            {
+                continue;
+            }
+
+            present.Add(project.Name);
+            if (project.Id is { Length: > 0 })
+            {
+                present.Add(project.Id);
+            }
+        }
+
+        foreach (var requested in _scope.Projects)
+        {
+            if (!present.Contains(requested))
+            {
+                Log.ScopeProjectNotMatched(_logger, requested);
+            }
+        }
+
+        if (retained == 0)
+        {
+            Log.ScopeMatchedNothing(_logger, _scope.Projects.Count);
+        }
     }
 }

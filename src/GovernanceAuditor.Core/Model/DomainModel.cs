@@ -18,8 +18,17 @@ public sealed record RepositoryInfo
     /// <summary>URL web du dépôt.</summary>
     public required string Url { get; init; }
 
-    /// <summary>Branche par défaut, au format complet « refs/heads/… ».</summary>
+    /// <summary>
+    /// Branche par défaut, au format complet « refs/heads/… ». Absente lorsque le
+    /// dépôt n'a jamais été initialisé : Azure DevOps omet alors le champ.
+    /// </summary>
     public string? DefaultBranch { get; init; }
+
+    /// <summary>Vrai si le dépôt est désactivé côté serveur.</summary>
+    public bool IsDisabled { get; init; }
+
+    /// <summary>Taille du dépôt en octets, lorsque le serveur la renvoie.</summary>
+    public long? SizeInBytes { get; init; }
 }
 
 /// <summary>Informations sur une branche, relatives à la branche par défaut.</summary>

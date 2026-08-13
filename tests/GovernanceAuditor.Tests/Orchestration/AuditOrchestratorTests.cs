@@ -21,11 +21,21 @@ internal sealed class FakeAzureDevOpsClient : IAzureDevOpsClient
         _failing = new HashSet<string>(failing, StringComparer.Ordinal);
     }
 
+    /// <summary>Noms des dépôts pour lesquels une collecte a réellement été tentée.</summary>
+    public List<string> Collected { get; } = [];
+
     public Task<IReadOnlyList<RepositoryInfo>> GetRepositoriesAsync(CancellationToken cancellationToken) =>
         Task.FromResult(_repositories);
 
     public Task<IReadOnlyList<BranchInfo>> GetBranchesAsync(RepositoryInfo repository, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(repository);
+
+        lock (Collected)
+        {
+            Collected.Add(repository.Name);
+        }
+
         Guard(repository);
         return Task.FromResult<IReadOnlyList<BranchInfo>>([]);
     }
@@ -77,6 +87,8 @@ public sealed class AuditOrchestratorTests
         Name = name,
         ProjectName = "Proj",
         Url = "https://x",
+        // Sans branche par défaut, l'orchestrateur écarterait le dépôt comme « vide ».
+        DefaultBranch = "refs/heads/main",
     };
 
     private static AuditOrchestrator NewOrchestrator(
@@ -150,6 +162,58 @@ public sealed class AuditOrchestratorTests
         var act = async () => await orchestrator.RunAsync(progress: null, cts.Token);
 
         await act.Should().ThrowAsync<OperationCanceledException>();
+    }
+
+    [Fact]
+    public async Task Empty_and_disabled_repositories_are_skipped_without_any_collection()
+    {
+        var empty = Repo("Vide") with { DefaultBranch = null };
+        var disabled = Repo("Desactive") with { IsDisabled = true };
+        var client = new FakeAzureDevOpsClient([Repo("Alpha"), empty, disabled]);
+        var orchestrator = NewOrchestrator(client, [new StubAnalyzer(Severity.Warning)]);
+
+        var result = await orchestrator.RunAsync(progress: null, CancellationToken.None);
+
+        // Le point essentiel : aucun aller-retour réseau n'est tenté sur un dépôt écarté.
+        client.Collected.Should().ContainSingle().Which.Should().Be("Alpha");
+
+        result.RepositoriesAnalyzed.Should().Be(1);
+        result.RepositoriesFailed.Should().Be(0);
+        result.RepositoriesSkipped.Should().Be(2);
+        result.Skipped.Select(s => s.Repository).Should().Equal("Desactive", "Vide");
+        result.Skipped.Should().Contain(s => s.Repository == "Vide" && s.Reason.Contains("vide", StringComparison.Ordinal));
+        result.Skipped.Should().Contain(s => s.Repository == "Desactive" && s.Reason.Contains("désactivé", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Skipped_repositories_do_not_count_as_failures_for_the_exit_code()
+    {
+        // Deux dépôts vides sur trois : sans exclusion, le ratio d'échec ferait
+        // basculer le code de sortie en « analyse partielle ».
+        var client = new FakeAzureDevOpsClient(
+        [
+            Repo("Alpha"),
+            Repo("Vide1") with { DefaultBranch = null },
+            Repo("Vide2") with { DefaultBranch = null },
+        ]);
+        var orchestrator = NewOrchestrator(client, [new StubAnalyzer(Severity.Info)]);
+
+        var result = await orchestrator.RunAsync(progress: null, CancellationToken.None);
+
+        ExitCodePolicy.Resolve(result, new ExecutionOptions()).Should().Be(ExitCodes.Success);
+    }
+
+    [Fact]
+    public async Task Progress_total_counts_only_the_repositories_actually_analysed()
+    {
+        var client = new FakeAzureDevOpsClient([Repo("A"), Repo("Vide") with { DefaultBranch = null }]);
+        var orchestrator = NewOrchestrator(client, [new StubAnalyzer(Severity.Info)]);
+
+        var reports = new List<AuditProgress>();
+        await orchestrator.RunAsync(new SynchronousProgress(reports.Add), CancellationToken.None);
+
+        reports.Should().ContainSingle();
+        reports[0].Total.Should().Be(1);
     }
 
     /// <summary>Collecte synchrone des avancements (Progress&lt;T&gt; passerait par le pool de threads).</summary>

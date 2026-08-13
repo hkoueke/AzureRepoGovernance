@@ -53,8 +53,11 @@ internal sealed class AuditOrchestrator
     {
         var startedAt = Stopwatch.GetTimestamp();
 
-        var repositories = await _client.GetRepositoriesAsync(cancellationToken).ConfigureAwait(false);
-        Log.RepositoriesDiscovered(_logger, repositories.Count);
+        var discovered = await _client.GetRepositoriesAsync(cancellationToken).ConfigureAwait(false);
+        Log.RepositoriesDiscovered(_logger, discovered.Count);
+
+        var (repositories, skipped) = Partition(discovered);
+        Log.RepositoriesRetained(_logger, repositories.Count, skipped.Count);
 
         var findings = new List<AuditFinding>();
         var errors = new List<CollectionError>();
@@ -128,8 +131,54 @@ internal sealed class AuditOrchestrator
             Errors = errors.OrderBy(e => e.Repository, StringComparer.OrdinalIgnoreCase).ToList(),
             RepositoriesAnalyzed = analyzed,
             RepositoriesFailed = failed,
+            Skipped = skipped,
             Duration = Stopwatch.GetElapsedTime(startedAt),
         };
+    }
+
+    /// <summary>
+    /// Sépare les dépôts analysables de ceux qu'il est inutile d'interroger. Les
+    /// écarter ici, avant toute requête, évite quatre allers-retours HTTP par dépôt
+    /// et empêche un dépôt vide d'apparaître en échec de collecte : sur un dépôt sans
+    /// commit, <c>stats/branches</c> peut répondre 404 et produire une erreur opaque.
+    /// </summary>
+    private (List<RepositoryInfo> Analysable, List<SkippedRepository> Skipped) Partition(
+        IReadOnlyList<RepositoryInfo> discovered)
+    {
+        var analysable = new List<RepositoryInfo>(discovered.Count);
+        var skipped = new List<SkippedRepository>();
+
+        foreach (var repository in discovered)
+        {
+            if (SkipReason(repository) is not { } reason)
+            {
+                analysable.Add(repository);
+                continue;
+            }
+
+            Log.RepositorySkipped(_logger, repository.Name, reason);
+            skipped.Add(new SkippedRepository { Repository = repository.Name, Reason = reason });
+        }
+
+        skipped.Sort((left, right) => string.Compare(left.Repository, right.Repository, StringComparison.OrdinalIgnoreCase));
+        return (analysable, skipped);
+    }
+
+    /// <summary>Motif d'exclusion d'un dépôt, ou <c>null</c> s'il doit être analysé.</summary>
+    private static string? SkipReason(RepositoryInfo repository)
+    {
+        if (repository.IsDisabled)
+        {
+            return "dépôt désactivé sur le serveur";
+        }
+
+        // Azure DevOps omet « defaultBranch » tant qu'aucun commit n'a été poussé.
+        if (string.IsNullOrEmpty(repository.DefaultBranch))
+        {
+            return "dépôt vide : aucune branche par défaut, rien à auditer";
+        }
+
+        return null;
     }
 
     private async Task<RepositoryContext> BuildContextAsync(RepositoryInfo repository, CancellationToken cancellationToken)

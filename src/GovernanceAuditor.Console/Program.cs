@@ -113,7 +113,8 @@ internal static class Program
             server.BaseUrl,
             server.Collection,
             scope.Projects.Count == 0 ? "tous les projets accessibles" : string.Join(", ", scope.Projects),
-            execution.MaxDegreeOfParallelism);
+            execution.MaxDegreeOfParallelism,
+            scope.Projects.Count > 0);
 
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMinutes(execution.GlobalTimeoutMinutes));
         var interrupted = false;

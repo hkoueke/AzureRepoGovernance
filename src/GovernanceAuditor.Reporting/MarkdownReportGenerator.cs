@@ -62,6 +62,7 @@ public sealed class MarkdownReportGenerator : IReportGenerator
         AppendFindings(builder, "Avertissements", result.Findings, Severity.Warning);
         AppendFindings(builder, "Informations", result.Findings, Severity.Info);
         AppendErrors(builder, result.Errors);
+        AppendSkipped(builder, result.Skipped);
         AppendRepositoryDetails(builder, result);
 
         return builder.ToString();
@@ -73,6 +74,12 @@ public sealed class MarkdownReportGenerator : IReportGenerator
         builder.AppendLine();
         AppendBullet(builder, "Dépôts analysés", Inv(result.RepositoriesAnalyzed));
         AppendBullet(builder, "Dépôts en échec de collecte", Inv(result.RepositoriesFailed));
+
+        if (result.RepositoriesSkipped > 0)
+        {
+            AppendBullet(builder, "Dépôts écartés avant collecte", Inv(result.RepositoriesSkipped));
+        }
+
         AppendBullet(builder, "Findings critiques", Inv(Count(result, Severity.Critical)));
         AppendBullet(builder, "Avertissements", Inv(Count(result, Severity.Warning)));
         AppendBullet(builder, "Durée", result.Duration.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture));
@@ -139,6 +146,28 @@ public sealed class MarkdownReportGenerator : IReportGenerator
         foreach (var error in errors.OrderBy(e => e.Repository, StringComparer.OrdinalIgnoreCase))
         {
             builder.Append("- **").Append(MarkdownText.Inline(error.Repository)).Append("** : ").AppendLine(MarkdownText.Inline(error.Message));
+        }
+
+        builder.AppendLine();
+    }
+
+    /// <summary>
+    /// Liste les dépôts écartés avant toute collecte. Les nommer évite qu'une absence
+    /// du rapport soit interprétée comme un oubli de l'outil.
+    /// </summary>
+    private static void AppendSkipped(StringBuilder builder, IReadOnlyList<SkippedRepository> skipped)
+    {
+        if (skipped.Count == 0)
+        {
+            return;
+        }
+
+        builder.AppendLine("## Dépôts écartés");
+        builder.AppendLine();
+
+        foreach (var entry in skipped.OrderBy(s => s.Repository, StringComparer.OrdinalIgnoreCase))
+        {
+            builder.Append("- **").Append(MarkdownText.Inline(entry.Repository)).Append("** : ").AppendLine(MarkdownText.Inline(entry.Reason));
         }
 
         builder.AppendLine();

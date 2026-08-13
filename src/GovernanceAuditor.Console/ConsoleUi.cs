@@ -76,7 +76,7 @@ internal sealed class ConsoleUi
     }
 
     /// <summary>Affiche l'en-tête de l'exécution et le contexte de connexion.</summary>
-    public void Banner(string server, string collection, string scope, int parallelism)
+    public void Banner(string server, string collection, string scope, int parallelism, bool scopeRestricted)
     {
         var rule = new string(_unicode ? '─' : '-', 62);
 
@@ -86,7 +86,12 @@ internal sealed class ConsoleUi
         Write($"  {rule}", ConsoleColor.DarkGray);
         Write($"  Serveur      : {server}", ConsoleColor.DarkGray);
         Write($"  Collection   : {collection}", ConsoleColor.DarkGray);
-        Write($"  Périmètre    : {scope}", ConsoleColor.DarkGray);
+
+        // Un périmètre restreint explique à lui seul un rapport qui paraît incomplet :
+        // il doit ressortir, pas se fondre dans le gris des autres lignes.
+        Write(
+            $"  Périmètre    : {scope}",
+            scopeRestricted ? ConsoleColor.Yellow : ConsoleColor.DarkGray);
         Write($"  Parallélisme : {parallelism.ToString(CultureInfo.CurrentCulture)} dépôts simultanés", ConsoleColor.DarkGray);
         Write($"  Mode         : lecture seule (aucune modification du serveur)", ConsoleColor.DarkGray);
         SysConsole.WriteLine();
@@ -179,6 +184,11 @@ internal sealed class ConsoleUi
         if (result.RepositoriesFailed > 0)
         {
             Write($"    Dépôts en échec     : {result.RepositoriesFailed.ToString(CultureInfo.CurrentCulture)}", ConsoleColor.Yellow);
+        }
+
+        if (result.RepositoriesSkipped > 0)
+        {
+            Write($"    Dépôts écartés      : {result.RepositoriesSkipped.ToString(CultureInfo.CurrentCulture)} (vides ou désactivés)", ConsoleColor.DarkGray);
         }
 
         Write(
