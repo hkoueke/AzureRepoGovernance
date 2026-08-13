@@ -205,7 +205,7 @@ public sealed class AuditOrchestratorTests
         var result = await orchestrator.RunAsync(progress: null, CancellationToken.None);
 
         // La vacuité se constate : une lecture des branches, puis on s'arrête là.
-        client.Collected.Should().BeEquivalentTo(["Alpha", "Vide"]);
+        client.Collected.Should().BeEquivalentTo("Alpha", "Vide");
 
         result.RepositoriesAnalyzed.Should().Be(1);
         result.RepositoriesFailed.Should().Be(0);
