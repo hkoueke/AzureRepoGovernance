@@ -20,7 +20,6 @@ internal static class DomainMapping
             Url = dto.WebUrl ?? dto.Url ?? string.Empty,
             DefaultBranch = dto.DefaultBranch,
             IsDisabled = dto.IsDisabled,
-            SizeInBytes = dto.Size,
         };
     }
 

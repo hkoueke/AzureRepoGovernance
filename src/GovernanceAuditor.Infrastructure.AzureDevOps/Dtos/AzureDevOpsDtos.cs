@@ -26,7 +26,6 @@ internal sealed record RepositoryDto
     // est absent — et non vide — pour un dépôt jamais initialisé.
     public string? DefaultBranch { get; init; }
     public bool IsDisabled { get; init; }
-    public long? Size { get; init; }
     public ProjectDto? Project { get; init; }
 }
 

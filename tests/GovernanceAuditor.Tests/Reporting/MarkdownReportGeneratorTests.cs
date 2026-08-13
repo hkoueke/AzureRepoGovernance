@@ -139,7 +139,7 @@ public sealed class MarkdownReportGeneratorTests
         {
             Skipped =
             [
-                new SkippedRepository { Repository = "Delta", Reason = "dépôt vide : aucune branche par défaut, rien à auditer" },
+                new SkippedRepository { Repository = "Delta", Reason = "dépôt vide : aucune branche, rien à auditer" },
                 new SkippedRepository { Repository = "Epsilon", Reason = "dépôt désactivé sur le serveur" },
             ],
         };

@@ -1,3 +1,4 @@
+using System.Net;
 using GovernanceAuditor.Core.Abstractions;
 using GovernanceAuditor.Core.Model;
 using GovernanceAuditor.Core.Options;
@@ -68,7 +69,20 @@ internal sealed class AzureDevOpsClient : IAzureDevOpsClient
     {
         ArgumentNullException.ThrowIfNull(repository);
 
-        var stats = await _reader.GetListAsync<BranchStatDto>(_routes.BranchStats(repository.Id), cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<BranchStatDto> stats;
+        try
+        {
+            stats = await _reader.GetListAsync<BranchStatDto>(_routes.BranchStats(repository.Id), cancellationToken).ConfigureAwait(false);
+        }
+        catch (HttpRequestException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+        {
+            // Sur un dépôt sans commit, « stats/branches » répond 404. Ce n'est pas une
+            // erreur de collecte : c'est la façon dont le serveur dit « aucune branche ».
+            // Sans ce filet, le dépôt apparaîtrait en échec avec un message opaque.
+            Log.BranchStatsNotFound(_logger, repository.Name);
+            return [];
+        }
+
         var refs = await _reader.GetListAsync<RefDto>(_routes.Refs(repository.Id), cancellationToken).ConfigureAwait(false);
 
         return DomainMapping.Branches(stats, refs);

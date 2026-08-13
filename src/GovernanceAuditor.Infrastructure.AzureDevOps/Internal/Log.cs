@@ -34,4 +34,10 @@ internal static partial class Log
         Level = LogLevel.Warning,
         Message = "Aucun dépôt retenu : les {Count} projet(s) demandé(s) ne correspondent à aucun dépôt accessible")]
     public static partial void ScopeMatchedNothing(ILogger logger, int count);
+
+    [LoggerMessage(
+        EventId = 2004,
+        Level = LogLevel.Debug,
+        Message = "Dépôt « {Repository} » : stats/branches répond 404, traité comme dépôt sans branche")]
+    public static partial void BranchStatsNotFound(ILogger logger, string repository);
 }

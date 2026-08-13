@@ -21,6 +21,9 @@ internal readonly record struct AuditProgress(int Completed, int Total, int Fail
 /// </summary>
 internal sealed class AuditOrchestrator
 {
+    private const string DisabledRepositoryReason = "dépôt désactivé sur le serveur";
+    private const string EmptyRepositoryReason = "dépôt vide : aucune branche, rien à auditer";
+
     private readonly IAzureDevOpsClient _client;
     private readonly IReadOnlyList<IRepositoryAnalyzer> _analyzers;
     private readonly RulesOptions _rules;
@@ -65,6 +68,10 @@ internal sealed class AuditOrchestrator
         var analyzed = 0;
         var failed = 0;
 
+        // Les dépôts vides ne sont ni analysés ni en échec, mais ils font partie du
+        // total : sans ce compteur, la progression n'atteindrait jamais 100 %.
+        var skippedDuringCollection = 0;
+
         var parallelOptions = new ParallelOptions
         {
             MaxDegreeOfParallelism = Math.Max(1, _execution.MaxDegreeOfParallelism),
@@ -75,7 +82,30 @@ internal sealed class AuditOrchestrator
         {
             try
             {
-                var context = await BuildContextAsync(repository, token).ConfigureAwait(false);
+                // La liste des branches fait foi. « defaultBranch » est un réglage du
+                // dépôt : il peut manquer alors que des refs existent (branche par défaut
+                // supprimée ou jamais définie). S'y fier écarterait de l'audit un dépôt
+                // bien réel, et le sortirait au passage du ratio d'échec.
+                var branches = await _client.GetBranchesAsync(repository, token).ConfigureAwait(false);
+
+                if (branches.Count == 0)
+                {
+                    Log.RepositorySkipped(_logger, repository.Name, EmptyRepositoryReason);
+
+                    lock (gate)
+                    {
+                        skipped.Add(new SkippedRepository
+                        {
+                            Repository = repository.Name,
+                            Reason = EmptyRepositoryReason,
+                        });
+                        skippedDuringCollection++;
+                    }
+
+                    return;
+                }
+
+                var context = await BuildContextAsync(repository, branches, token).ConfigureAwait(false);
                 var repositoryFindings = await AnalyzeAsync(context, token).ConfigureAwait(false);
 
                 lock (gate)
@@ -114,7 +144,7 @@ internal sealed class AuditOrchestrator
                     int done, currentFailed;
                     lock (gate)
                     {
-                        done = analyzed + failed;
+                        done = analyzed + failed + skippedDuringCollection;
                         currentFailed = failed;
                     }
 
@@ -131,16 +161,18 @@ internal sealed class AuditOrchestrator
             Errors = errors.OrderBy(e => e.Repository, StringComparer.OrdinalIgnoreCase).ToList(),
             RepositoriesAnalyzed = analyzed,
             RepositoriesFailed = failed,
-            Skipped = skipped,
+            // Tri final : les exclusions viennent de deux sources (dépôts désactivés
+            // repérés en amont, dépôts vides constatés en parallèle). Le rapport doit
+            // rester reproductible d'une exécution à l'autre.
+            Skipped = skipped.OrderBy(s => s.Repository, StringComparer.OrdinalIgnoreCase).ToList(),
             Duration = Stopwatch.GetElapsedTime(startedAt),
         };
     }
 
     /// <summary>
-    /// Sépare les dépôts analysables de ceux qu'il est inutile d'interroger. Les
-    /// écarter ici, avant toute requête, évite quatre allers-retours HTTP par dépôt
-    /// et empêche un dépôt vide d'apparaître en échec de collecte : sur un dépôt sans
-    /// commit, <c>stats/branches</c> peut répondre 404 et produire une erreur opaque.
+    /// Écarte les dépôts désactivés avant toute requête. C'est le seul motif que le
+    /// serveur affirme directement : la vacuité, elle, ne se déduit d'aucune métadonnée
+    /// et n'est constatée qu'après lecture des branches.
     /// </summary>
     private (List<RepositoryInfo> Analysable, List<SkippedRepository> Skipped) Partition(
         IReadOnlyList<RepositoryInfo> discovered)
@@ -150,42 +182,26 @@ internal sealed class AuditOrchestrator
 
         foreach (var repository in discovered)
         {
-            if (SkipReason(repository) is not { } reason)
+            if (!repository.IsDisabled)
             {
                 analysable.Add(repository);
                 continue;
             }
 
-            Log.RepositorySkipped(_logger, repository.Name, reason);
-            skipped.Add(new SkippedRepository { Repository = repository.Name, Reason = reason });
+            Log.RepositorySkipped(_logger, repository.Name, DisabledRepositoryReason);
+            skipped.Add(new SkippedRepository { Repository = repository.Name, Reason = DisabledRepositoryReason });
         }
 
-        skipped.Sort((left, right) => string.Compare(left.Repository, right.Repository, StringComparison.OrdinalIgnoreCase));
         return (analysable, skipped);
     }
 
-    /// <summary>Motif d'exclusion d'un dépôt, ou <c>null</c> s'il doit être analysé.</summary>
-    private static string? SkipReason(RepositoryInfo repository)
-    {
-        if (repository.IsDisabled)
-        {
-            return "dépôt désactivé sur le serveur";
-        }
-
-        // Azure DevOps omet « defaultBranch » tant qu'aucun commit n'a été poussé.
-        if (string.IsNullOrEmpty(repository.DefaultBranch))
-        {
-            return "dépôt vide : aucune branche par défaut, rien à auditer";
-        }
-
-        return null;
-    }
-
-    private async Task<RepositoryContext> BuildContextAsync(RepositoryInfo repository, CancellationToken cancellationToken)
+    private async Task<RepositoryContext> BuildContextAsync(
+        RepositoryInfo repository,
+        IReadOnlyList<BranchInfo> branches,
+        CancellationToken cancellationToken)
     {
         // Séquentiel volontairement : le parallélisme est déjà appliqué au niveau
         // des dépôts, inutile de multiplier la charge sur le serveur.
-        var branches = await _client.GetBranchesAsync(repository, cancellationToken).ConfigureAwait(false);
         var pullRequests = await _client.GetPullRequestsAsync(repository, cancellationToken).ConfigureAwait(false);
         var pipelines = await _client.GetPipelinesAsync(repository, cancellationToken).ConfigureAwait(false);
         var policies = await _client.GetPoliciesAsync(repository, cancellationToken).ConfigureAwait(false);

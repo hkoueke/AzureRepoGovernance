@@ -1,3 +1,4 @@
+using System.Net;
 using FluentAssertions;
 using GovernanceAuditor.Core.Model;
 using GovernanceAuditor.Core.Options;
@@ -205,7 +206,7 @@ public sealed class AzureDevOpsClientTests
     public async Task GetRepositoriesAsync_maps_disabled_flag_and_absent_default_branch()
     {
         // Azure DevOps omet « defaultBranch » tant qu'aucun commit n'a été poussé.
-        const string body = """{"value":[{"id":"r1","name":"Vide","project":{"id":"pa","name":"Alpha"}},{"id":"r2","name":"Desactive","isDisabled":true,"size":0,"defaultBranch":"refs/heads/main","project":{"id":"pa","name":"Alpha"}}]}""";
+        const string body = """{"value":[{"id":"r1","name":"Vide","project":{"id":"pa","name":"Alpha"}},{"id":"r2","name":"Desactive","isDisabled":true,"defaultBranch":"refs/heads/main","project":{"id":"pa","name":"Alpha"}}]}""";
         using var handler = new FakeHttpMessageHandler(_ => FakeHttpMessageHandler.Json(body));
         using var http = new HttpClient(handler) { BaseAddress = new Uri("https://server/") };
         var client = NewClient(http);
@@ -216,6 +217,37 @@ public sealed class AzureDevOpsClientTests
         repos[0].DefaultBranch.Should().BeNull();
         repos[0].IsDisabled.Should().BeFalse();
         repos[1].IsDisabled.Should().BeTrue();
-        repos[1].SizeInBytes.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetBranchesAsync_treats_a_404_on_branch_stats_as_no_branches()
+    {
+        // Sur un dépôt sans commit, le serveur répond 404 : c'est « aucune branche »,
+        // pas une erreur de collecte. Sans ce traitement, le dépôt remonterait en
+        // échec avec un HttpRequestException illisible.
+        using var handler = new FakeHttpMessageHandler(req =>
+            req.RequestUri!.AbsoluteUri.Contains("stats/branches", StringComparison.Ordinal)
+                ? FakeHttpMessageHandler.Status(HttpStatusCode.NotFound)
+                : FakeHttpMessageHandler.Json("""{"value":[]}"""));
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://server/") };
+        var client = NewClient(http);
+
+        var branches = await client.GetBranchesAsync(Repo(), CancellationToken.None);
+
+        branches.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetBranchesAsync_still_propagates_other_http_failures()
+    {
+        // Un 403 reste une vraie erreur : la masquer ferait passer un défaut de
+        // droits pour un dépôt vide.
+        using var handler = new FakeHttpMessageHandler(_ => FakeHttpMessageHandler.Status(HttpStatusCode.Forbidden));
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://server/") };
+        var client = NewClient(http);
+
+        var act = async () => await client.GetBranchesAsync(Repo(), CancellationToken.None);
+
+        await act.Should().ThrowAsync<HttpRequestException>();
     }
 }

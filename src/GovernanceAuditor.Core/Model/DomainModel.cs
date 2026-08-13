@@ -26,9 +26,6 @@ public sealed record RepositoryInfo
 
     /// <summary>Vrai si le dépôt est désactivé côté serveur.</summary>
     public bool IsDisabled { get; init; }
-
-    /// <summary>Taille du dépôt en octets, lorsque le serveur la renvoie.</summary>
-    public long? SizeInBytes { get; init; }
 }
 
 /// <summary>Informations sur une branche, relatives à la branche par défaut.</summary>
