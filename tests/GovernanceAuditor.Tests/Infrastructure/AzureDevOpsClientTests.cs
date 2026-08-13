@@ -220,6 +220,57 @@ public sealed class AzureDevOpsClientTests
     }
 
     [Fact]
+    public async Task GetRepositoriesAsync_ignores_blank_scope_entries()
+    {
+        // « --projets » remplace le périmètre en blanchissant les index excédentaires
+        // hérités d'appsettings.json : ces entrées vides ne doivent désigner aucun projet,
+        // ni compter comme un projet demandé sans correspondance.
+        const string body = """{"value":[{"id":"r1","name":"RepoA","project":{"id":"pa","name":"Alpha"}},{"id":"r2","name":"RepoB","project":{"id":"pb","name":"Beta"}}]}""";
+        using var handler = new FakeHttpMessageHandler(_ => FakeHttpMessageHandler.Json(body));
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://server/") };
+        var logger = new RecordingLogger<AzureDevOpsClient>();
+        var client = NewClient(http, scope: new ScopeOptions { Projects = ["Beta", "", "  "] }, logger: logger);
+
+        var repos = await client.GetRepositoriesAsync(CancellationToken.None);
+
+        repos.Should().ContainSingle();
+        repos[0].Name.Should().Be("RepoB");
+        logger.Entries.Should().NotContain(e => e.Level == LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task GetRepositoriesAsync_treats_an_all_blank_scope_as_no_filter()
+    {
+        // « --projets "" » : toutes les entrées sont blanchies, donc aucun filtre.
+        const string body = """{"value":[{"id":"r1","name":"RepoA","project":{"id":"pa","name":"Alpha"}},{"id":"r2","name":"RepoB","project":{"id":"pb","name":"Beta"}}]}""";
+        using var handler = new FakeHttpMessageHandler(_ => FakeHttpMessageHandler.Json(body));
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://server/") };
+        var client = NewClient(http, scope: new ScopeOptions { Projects = ["", ""] });
+
+        var repos = await client.GetRepositoriesAsync(CancellationToken.None);
+
+        repos.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task GetPoliciesAsync_reads_project_policies_once_per_project()
+    {
+        // L'endpoint est à portée projet : dix dépôts d'un même projet ne doivent pas
+        // provoquer dix requêtes identiques.
+        using var handler = new FakeHttpMessageHandler(_ => FakeHttpMessageHandler.Json("""{"value":[]}"""));
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://server/") };
+        var client = NewClient(http);
+
+        var first = Repo();
+        var second = Repo() with { Id = "repo-2", Name = "R2" };
+
+        await client.GetPoliciesAsync(first, CancellationToken.None);
+        await client.GetPoliciesAsync(second, CancellationToken.None);
+
+        handler.Requests.Should().ContainSingle();
+    }
+
+    [Fact]
     public async Task GetBranchesAsync_treats_a_404_on_branch_stats_as_no_branches()
     {
         // Sur un dépôt sans commit, le serveur répond 404 : c'est « aucune branche »,

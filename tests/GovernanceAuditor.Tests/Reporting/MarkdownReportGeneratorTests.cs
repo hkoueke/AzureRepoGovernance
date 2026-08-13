@@ -146,7 +146,7 @@ public sealed class MarkdownReportGeneratorTests
 
         var content = await RenderAsync(result);
 
-        content.Should().Contain("Dépôts écartés avant collecte : 2");
+        content.Should().Contain("Dépôts écartés : 2");
         content.Should().Contain("## Dépôts écartés");
         content.Should().Contain("**Delta** : dépôt vide");
         content.Should().Contain("**Epsilon** : dépôt désactivé sur le serveur");
@@ -158,7 +158,7 @@ public sealed class MarkdownReportGeneratorTests
         var content = await RenderAsync(SampleResult());
 
         content.Should().NotContain("## Dépôts écartés");
-        content.Should().NotContain("Dépôts écartés avant collecte");
+        content.Should().NotContain("Dépôts écartés");
     }
 
     [Fact]

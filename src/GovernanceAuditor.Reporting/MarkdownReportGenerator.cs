@@ -77,7 +77,7 @@ public sealed class MarkdownReportGenerator : IReportGenerator
 
         if (result.RepositoriesSkipped > 0)
         {
-            AppendBullet(builder, "Dépôts écartés avant collecte", Inv(result.RepositoriesSkipped));
+            AppendBullet(builder, "Dépôts écartés", Inv(result.RepositoriesSkipped));
         }
 
         AppendBullet(builder, "Findings critiques", Inv(Count(result, Severity.Critical)));
@@ -152,7 +152,7 @@ public sealed class MarkdownReportGenerator : IReportGenerator
     }
 
     /// <summary>
-    /// Liste les dépôts écartés avant toute collecte. Les nommer évite qu'une absence
+    /// Liste les dépôts écartés de l'analyse. Les nommer évite qu'une absence
     /// du rapport soit interprétée comme un oubli de l'outil.
     /// </summary>
     private static void AppendSkipped(StringBuilder builder, IReadOnlyList<SkippedRepository> skipped)

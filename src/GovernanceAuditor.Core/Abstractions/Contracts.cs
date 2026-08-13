@@ -57,6 +57,8 @@ public sealed record CollectionError
 /// <summary>
 /// Dépôt volontairement écarté de l'analyse, avec le motif. Un dépôt écarté n'est
 /// ni un succès ni un échec : l'analyser n'aurait produit aucune information.
+/// L'exclusion intervient soit d'emblée (dépôt désactivé, le serveur l'affirme),
+/// soit après lecture des branches (dépôt sans aucune branche).
 /// </summary>
 public sealed record SkippedRepository
 {
@@ -83,12 +85,12 @@ public sealed record AuditRunResult
     public required int RepositoriesFailed { get; init; }
 
     /// <summary>
-    /// Dépôts écartés avant toute collecte (désactivés, jamais initialisés).
+    /// Dépôts écartés de l'analyse (désactivés, ou dépourvus de branche).
     /// Vide par défaut : un dépôt écarté ne compte ni comme analysé, ni comme en échec.
     /// </summary>
     public IReadOnlyList<SkippedRepository> Skipped { get; init; } = [];
 
-    /// <summary>Nombre de dépôts écartés avant collecte.</summary>
+    /// <summary>Nombre de dépôts écartés de l'analyse.</summary>
     public int RepositoriesSkipped => Skipped.Count;
 
     /// <summary>Durée totale de l'exécution.</summary>

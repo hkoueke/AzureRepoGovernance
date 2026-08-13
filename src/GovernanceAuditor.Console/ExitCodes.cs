@@ -34,9 +34,13 @@ internal static class ExitCodePolicy
 
         var total = result.RepositoriesAnalyzed + result.RepositoriesFailed;
 
+        // Aucun dépôt analysé : périmètre qui ne correspond à rien, droits insuffisants,
+        // collection vide. Renvoyer 0 affirmerait « aucune anomalie » sur la foi d'une
+        // analyse qui n'a pas eu lieu — exactement ce que la politique de codes de sortie
+        // refuse. Un ordonnanceur doit voir passer un résultat partiel.
         if (total == 0)
         {
-            return ExitCodes.Success;
+            return ExitCodes.PartialFailure;
         }
 
         var failureRatio = (double)result.RepositoriesFailed / total;

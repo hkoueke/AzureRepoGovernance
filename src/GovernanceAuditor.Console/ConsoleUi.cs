@@ -82,7 +82,7 @@ internal sealed class ConsoleUi
 
         SysConsole.WriteLine();
         Write($"  {Glyph("▸", ">")} Auditeur de gouvernance des dépôts Azure DevOps", ConsoleColor.Cyan);
-        Write($"  {Glyph("▸", ">")} Hervé KOUEKE (herve.kouekekouemeni@cgi.com", ConsoleColor.Cyan);
+        Write($"  {Glyph("▸", ">")} Hervé KOUEKE (herve.kouekekouemeni@cgi.com)", ConsoleColor.Cyan);
         Write($"  {rule}", ConsoleColor.DarkGray);
         Write($"  Serveur      : {server}", ConsoleColor.DarkGray);
         Write($"  Collection   : {collection}", ConsoleColor.DarkGray);

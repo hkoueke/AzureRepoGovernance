@@ -28,6 +28,27 @@ public sealed class ExitCodePolicyTests
     };
 
     [Fact]
+    public void No_repository_analysed_is_reported_as_partial_not_success()
+    {
+        // Périmètre qui ne correspond à rien, droits insuffisants, collection vide :
+        // renvoyer 0 affirmerait « aucune anomalie » sans avoir rien examiné.
+        var code = ExitCodePolicy.Resolve(Result(0, 0), new ExecutionOptions());
+
+        code.Should().Be(ExitCodes.PartialFailure);
+    }
+
+    [Fact]
+    public void Only_skipped_repositories_is_reported_as_partial()
+    {
+        var result = Result(0, 0) with
+        {
+            Skipped = [new SkippedRepository { Repository = "Vide", Reason = "dépôt vide" }],
+        };
+
+        ExitCodePolicy.Resolve(result, new ExecutionOptions()).Should().Be(ExitCodes.PartialFailure);
+    }
+
+    [Fact]
     public void Clean_run_returns_success()
     {
         var code = ExitCodePolicy.Resolve(Result(10, 0, Severity.Warning), new ExecutionOptions());

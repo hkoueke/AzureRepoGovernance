@@ -153,7 +153,7 @@ internal sealed class AuditOrchestrator
             }
         }).ConfigureAwait(false);
 
-        Log.AnalysisCompleted(_logger, analyzed, failed);
+        Log.AnalysisCompleted(_logger, analyzed, failed, skipped.Count);
 
         return new AuditRunResult
         {

@@ -7,3 +7,7 @@ TestResults/
 [Rr]eports/
 *.coverage
 *.coveragexml
+
+# Réglages locaux (serveur réel, projets internes) : jamais versionnés.
+appsettings.Development.json
+appsettings.local.json
