@@ -21,6 +21,8 @@ internal sealed class FakeAzureDevOpsClient : IAzureDevOpsClient
         _failing = new HashSet<string>(failing, StringComparer.Ordinal);
     }
 
+    private readonly Lock _collectedGate = new();
+
     /// <summary>Noms des dépôts pour lesquels une collecte a réellement été tentée.</summary>
     public List<string> Collected { get; } = [];
 
@@ -31,7 +33,7 @@ internal sealed class FakeAzureDevOpsClient : IAzureDevOpsClient
     {
         ArgumentNullException.ThrowIfNull(repository);
 
-        lock (Collected)
+        lock (_collectedGate)
         {
             Collected.Add(repository.Name);
         }
@@ -180,9 +182,10 @@ public sealed class AuditOrchestratorTests
         result.RepositoriesAnalyzed.Should().Be(1);
         result.RepositoriesFailed.Should().Be(0);
         result.RepositoriesSkipped.Should().Be(2);
+        // Tri alphabétique : « Desactive » puis « Vide ».
         result.Skipped.Select(s => s.Repository).Should().Equal("Desactive", "Vide");
-        result.Skipped.Should().Contain(s => s.Repository == "Vide" && s.Reason.Contains("vide", StringComparison.Ordinal));
-        result.Skipped.Should().Contain(s => s.Repository == "Desactive" && s.Reason.Contains("désactivé", StringComparison.Ordinal));
+        result.Skipped[0].Reason.Should().Contain("désactivé");
+        result.Skipped[1].Reason.Should().Contain("vide");
     }
 
     [Fact]
