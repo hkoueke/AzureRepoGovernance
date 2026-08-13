@@ -43,9 +43,17 @@ Pousser une étiquette `v*` crée en plus une release GitHub avec les deux
 exécutables, leurs empreintes SHA256 et `appsettings.sample.json` :
 
 ```powershell
-git tag v1.0.0
+git checkout main
+git pull origin main
+git tag -a v1.0.0 -m "v1.0.0"
 git push origin v1.0.0
 ```
+
+L'étiquette **détermine la version du binaire** : `v1.2.3` produit un exécutable
+qui annonce `1.2.3` dans ses propriétés de fichier, complété du commit exact.
+Hors étiquette, les builds portent un suffixe `-ci.<n>` pour qu'une compilation de
+branche ne puisse jamais passer pour une version publiée. `VersionPrefix` dans
+`Directory.Build.props` sert de valeur de repli.
 
 ### L'exécutable livré
 

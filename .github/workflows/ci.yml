@@ -115,6 +115,19 @@ jobs:
             nuget-${{ runner.os }}-${{ matrix.rid }}-
             nuget-${{ runner.os }}-
 
+      # Sur une étiquette « v1.2.3 », l'exécutable doit annoncer 1.2.3 : une release
+      # dont le binaire déclare une autre version est intraçable au support.
+      # Hors étiquette, un suffixe de préversion évite de faire passer une build de
+      # branche pour la version publiée.
+      - name: Détermination de la version
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "VERSION_ARG=-p:Version=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          else
+            echo "VERSION_ARG=-p:VersionSuffix=ci.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+          fi
+
       # IncludeNativeLibrariesForSelfExtract est ce qui rend l'exécutable
       # RÉELLEMENT unique : sans lui, les bibliothèques natives — dont les
       # données ICU, tirées par InvariantGlobalization=false — sont publiées
@@ -135,6 +148,8 @@ jobs:
           -p:EnableCompressionInSingleFile=true
           -p:PublishTrimmed=false
           -p:DebugType=none
+          $VERSION_ARG
+          -p:SourceRevisionId=$GITHUB_SHA
           -o out/${{ matrix.rid }}
 
       # AssemblyName vaut GovernanceAuditor pour les deux RID : sans renommage
