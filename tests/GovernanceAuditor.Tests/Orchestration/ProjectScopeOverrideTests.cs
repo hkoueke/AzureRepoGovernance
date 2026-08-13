@@ -26,7 +26,7 @@ public sealed class ProjectScopeOverrideTests
         return configuration;
     }
 
-    private static List<string?> ProjectsIn(IConfiguration configuration) =>
+    private static List<string?> ProjectsIn(ConfigurationManager configuration) =>
         configuration.GetSection(Prefix).GetChildren().Select(c => c.Value).ToList();
 
     [Fact]
