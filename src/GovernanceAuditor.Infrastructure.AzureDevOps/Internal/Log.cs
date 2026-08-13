@@ -14,11 +14,14 @@ internal static partial class Log
         Message = "Dépôts renvoyés par la collection : {Total}")]
     public static partial void RepositoriesReturned(ILogger logger, int total);
 
+    // Les projets demandés ne sont volontairement pas repris ici : la bannière les
+    // affiche déjà, et chaque projet sans correspondance fait l'objet d'un avertissement
+    // dédié. Les concaténer à l'appel coûterait à chaque exécution, journal actif ou non.
     [LoggerMessage(
         EventId = 2001,
         Level = LogLevel.Information,
-        Message = "Filtrage de périmètre : {Retained} dépôt(s) retenu(s) sur {Total}, projets demandés : {Projects}")]
-    public static partial void ScopeFilterApplied(ILogger logger, int retained, int total, string projects);
+        Message = "Filtrage de périmètre : {Retained} dépôt(s) retenu(s) sur {Total}")]
+    public static partial void ScopeFilterApplied(ILogger logger, int retained, int total);
 
     [LoggerMessage(
         EventId = 2002,

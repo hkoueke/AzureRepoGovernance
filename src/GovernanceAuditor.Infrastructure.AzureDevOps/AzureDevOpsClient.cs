@@ -58,12 +58,7 @@ internal sealed class AzureDevOpsClient : IAzureDevOpsClient
 
         // Un périmètre qui écarte tout est le symptôme le plus coûteux à diagnostiquer :
         // sans ces messages, un nom de projet inexact est indiscernable d'un projet vide.
-        // La concaténation reste sous condition : inutile de la payer si le niveau est désactivé (CA1873).
-        if (_logger.IsEnabled(LogLevel.Information))
-        {
-            Log.ScopeFilterApplied(_logger, selected.Count, dtos.Count, string.Join(", ", _scope.Projects));
-        }
-
+        Log.ScopeFilterApplied(_logger, selected.Count, dtos.Count);
         ReportUnmatchedProjects(dtos, selected.Count);
 
         return selected.Select(DomainMapping.Repository).ToList();
